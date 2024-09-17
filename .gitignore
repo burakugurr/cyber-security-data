@@ -1,0 +1,5 @@
+/.vscode
+credentials.json
+get_data.py
+iceberg_venv/*
+.env

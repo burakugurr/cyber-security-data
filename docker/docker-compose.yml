@@ -1,0 +1,84 @@
+version: "3"
+
+services:
+  # Postgres
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+    ports:
+      - "5435:5432"
+
+  #Superset
+  superset:
+    image: alexmerced/dremio-superset
+    container_name: superset
+    ports:
+      - 8080:8088
+
+  dremio:
+    image: dremio/dremio-oss:latest
+    platform: linux/x86_64
+    ports:
+      - 9047:9047
+      - 31010:31010
+      - 32010:32010
+
+  nessie:
+    image: ghcr.io/projectnessie/nessie:0.96.1
+    ports:
+      # API port
+      - "19120:19120"
+      # Management port (metrics and health checks)
+      - "1999:1999"
+    environment:
+      # Version store settings.
+      # This example uses ephemeral storage, data is lost during reset.
+      - nessie.version.store.type=IN_MEMORY
+      # Object store settings.
+      # This example uses MinIO as the object store.
+      - nessie.catalog.default-warehouse=warehouse
+      - nessie.catalog.warehouses.warehouse.location=s3://warehouse/
+      - nessie.catalog.service.s3.default-options.region=us-east-1
+      - nessie.catalog.service.s3.default-options.path-style-access=true
+      - nessie.catalog.service.s3.default-options.access-key=urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
+      - nessie.catalog.secrets.access-key.name=root
+      - nessie.catalog.secrets.access-key.secret=rootroot
+      # MinIO endpoint for Nessie server
+      - nessie.catalog.service.s3.default-options.endpoint=http://192.168.89.83:9000/
+      # MinIO endpoint for clients (on the Podman/Docker host)
+      - nessie.catalog.service.s3.default-options.external-endpoint=http://192.168.89.83:9002/
+      # Authorization settings.
+      # In this example, Nessie is configured with 3 clients and 3 rules:
+      # - client1: can access all namespaces
+      # - client2: can access all namespaces except 'sales'
+      # - client3: can access all namespaces except 'eng'
+      # - nessie.server.authorization.enabled=true
+      # - nessie.server.authorization.rules.client1=role=='service-account'
+    healthcheck:
+      test: "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /q/health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"
+      interval: 5s
+      timeout: 2s
+      retries: 15
+
+  # trino:
+  #   image: trinodb/trino:latest
+  #   ports:
+  #     - "5656:5656"
+  #   volumes:
+  #     - ./trino-catalogs:/etc/trino/catalog
+  # rest:
+  #   image: tabulario/iceberg-rest
+  #   container_name: iceberg-rest
+  #   ports:
+  #     - 8181:8181
+  #   environment:
+  #     - AWS_ACCESS_KEY_ID=admin
+  #     - AWS_SECRET_ACCESS_KEY=password
+  #     - AWS_REGION=us-east-1
+  #     - CATALOG_WAREHOUSE=s3://warehouse/
+  #     - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+  #     - CATALOG_S3_ENDPOINT=http://minio:9000
